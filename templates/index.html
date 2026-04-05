@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LectureAI — Turn Any Lecture Into Study Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HEADER — sticky top bar with brand and live model indicator
+══════════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="brand">
+    <div class="brand-icon">L</div>
+    <div class="brand-text">
+      <div class="brand-name">LectureAI</div>
+      <div class="brand-sub">YouTube Lecture → Study Notes</div>
+    </div>
+  </div>
+
+  <!-- Inline model selector in header -->
+  <div class="header-model-bar" id="headerModelBar">
+
+    <!-- SVG gradient defs (hidden, referenced by Gemini star) -->
+    <svg width="0" height="0" style="position:absolute">
+      <defs>
+        <linearGradient id="gemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#c4b5fd"/>
+          <stop offset="50%"  stop-color="#7c6fff"/>
+          <stop offset="100%" stop-color="#a78bfa"/>
+        </linearGradient>
+        <linearGradient id="groqGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#86efac"/>
+          <stop offset="50%"  stop-color="#22c55e"/>
+          <stop offset="100%" stop-color="#4ade80"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <!-- Gemini brand logo -->
+    <span class="hm-brand-gem" title="Google Gemini models">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C12 2 14.2 8.8 19.5 11C14.2 13.2 12 20 12 20C12 20 9.8 13.2 4.5 11C9.8 8.8 12 2 12 2Z" fill="url(#gemGrad)"/>
+        <path d="M5.5 3.5C5.5 3.5 6.4 6.1 8.5 7C6.4 7.9 5.5 10.5 5.5 10.5C5.5 10.5 4.6 7.9 2.5 7C4.6 6.1 5.5 3.5 5.5 3.5Z" fill="url(#gemGrad)" opacity="0.6"/>
+      </svg>
+      Gemini
+    </span>
+
+    <div class="hm-opt selected" data-hmodel="gemini-2.5-flash" onclick="selectHeaderModel(this)" title="Gemini 2.5 Flash — 250/day free">
+      <span class="hm-dot gem"></span>Flash
+    </div>
+    <div class="hm-opt" data-hmodel="gemini-2.5-flash-lite" onclick="selectHeaderModel(this)" title="Gemini 2.5 Flash Lite — 1,000/day free">
+      <span class="hm-dot gem"></span>Lite
+    </div>
+    <div class="hm-opt" data-hmodel="gemini-2.5-pro" onclick="selectHeaderModel(this)" title="Gemini 2.5 Pro — 100/day free">
+      <span class="hm-dot gem"></span>Pro
+    </div>
+
+    <div class="hm-sep"></div>
+
+    <!-- Groq brand logo -->
+    <span class="hm-brand-groq" title="Groq LPU inference models">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C15.1 22 17.88 20.59 19.74 18.37L17.6 16.23C16.29 17.67 14.25 18.6 12 18.6C8.36 18.6 5.4 15.64 5.4 12C5.4 8.36 8.36 5.4 12 5.4C15.01 5.4 17.55 7.35 18.36 10.05H14.4V13.45H21.9C21.96 12.98 22 12.5 22 12C22 6.48 17.52 2 12 2Z" fill="url(#groqGrad)"/>
+      </svg>
+      Groq
+    </span>
+
+    <div class="hm-opt" data-hmodel="groq-llama-3.3-70b" onclick="selectHeaderModel(this)" title="Groq Llama 3.3 70B — ~14,400/day free ⭐">
+      <span class="hm-dot groq"></span>70B
+    </div>
+    <div class="hm-opt" data-hmodel="groq-llama-3.1-8b" onclick="selectHeaderModel(this)" title="Groq Llama 3.1 8B — huge free limits">
+      <span class="hm-dot groq"></span>8B
+    </div>
+    <div class="hm-opt" data-hmodel="groq-mixtral" onclick="selectHeaderModel(this)" title="Groq Mixtral 8x7B — good for long context">
+      <span class="hm-dot groq"></span>Mixtral
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button onclick="toggleSettings()" class="settings-btn" id="apiKeyBtn" title="Configure API Keys">
+      🔑 API Key
+    </button>
+  </div>
+</header>
+
+<!-- 🔑 API Key Panel -->
+<div id="settingsPanel" style="display:none;">
+  <div class="settings-inner">
+    <div class="settings-header-row">
+      <div class="settings-title">🔑 API Keys</div>
+      <button onclick="closeSettings()" class="settings-close-btn" title="Close">✕</button>
+    </div>
+
+    <div class="key-two-col">
+      <!-- Gemini Key -->
+      <div class="key-section">
+        <div class="key-section-label">
+          <span class="key-badge gem-badge">G</span>
+          <strong>Gemini</strong>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="key-get-link">Get free key ↗</a>
+        </div>
+        <div class="settings-row">
+          <input id="geminiKeyInput" type="password" placeholder="AIzaSy…"
+                 autocomplete="off" spellcheck="false"
+                 oninput="saveGeminiKey(this.value)">
+          <button onclick="clearGeminiKey()" class="btn-clear-key">✕</button>
+        </div>
+        <div id="geminiKeyStatus" class="api-key-status"></div>
+        <div class="key-limits">Pro: 100/day · Flash: 250/day · Lite: 1,000/day</div>
+      </div>
+
+      <!-- Groq Key -->
+      <div class="key-section">
+        <div class="key-section-label">
+          <span class="key-badge groq-badge">Q</span>
+          <strong>Groq</strong>
+          <a href="https://console.groq.com" target="_blank" rel="noopener" class="key-get-link">Get free key ↗</a>
+          <span class="key-recommended">⭐ Recommended</span>
+        </div>
+        <div class="settings-row">
+          <input id="groqKeyInput" type="password" placeholder="gsk_…"
+                 autocomplete="off" spellcheck="false"
+                 oninput="saveGroqKey(this.value)">
+          <button onclick="clearGroqKey()" class="btn-clear-key">✕</button>
+        </div>
+        <div id="groqKeyStatus" class="api-key-status"></div>
+        <div class="key-limits">70B: ~14,400/day · 8B: effectively unlimited</div>
+      </div>
+    </div>
+
+    <div class="settings-ok-row">
+      <button onclick="closeSettings()" class="btn btn-primary" style="padding:0.4rem 2rem; font-size:0.85rem;">OK — Save & Close</button>
+      <span class="settings-tip">Keys saved in your browser only — never stored on the server.</span>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HERO SECTION
+  ══════════════════════════════════════════════════════════════ -->
+  <section class="hero">
+    <h1 class="hero-title">Turn any YouTube lecture<br>into comprehensive notes</h1>
+    <p class="hero-sub">Supports lectures of any length — 1 hour to 90+ hours. Also supports full course playlists.
+      Every concept, formula, and example captured. Built for self-learners studying data science, ML, and AI.</p>
+    <div class="hero-chips">
+      <span class="chip">✓ 1M token context</span>
+      <span class="chip">✓ 90+ hour lectures</span>
+      <span class="chip">✓ Full playlist support</span>
+      <span class="chip">✓ Nothing skipped</span>
+      <span class="chip">✓ PDF &amp; Word export</span>
+      <span class="chip">✓ Coverage audit</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STEP PROGRESS TRACK
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="step-track">
+    <div class="step active" id="s1"><div class="step-num"><span>1</span></div><span class="step-label">Input</span></div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="s2"><div class="step-num"><span>2</span></div><span class="step-label">Notes</span></div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="s3"><div class="step-num"><span>3</span></div><span class="step-label">Article</span></div>
+    <div class="step-arrow">›</div>
+    <div class="step" id="s4"><div class="step-num"><span>4</span></div><span class="step-label">Export</span></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PANEL 1 — VIDEO INPUT
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="panel visible" id="panel1">
+    <div class="panel-head">
+      <div class="panel-title"><span class="panel-num">01</span><h2>Add Your Lecture</h2></div>
+      <span class="panel-badge">Start Here</span>
+    </div>
+    <div class="panel-body">
+
+      <!-- Tab switcher: URL | Playlist | Manual paste -->
+      <div class="input-tabs">
+        <div class="input-tab active" id="tabBtn-url" onclick="switchInputTab('url')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+          YouTube URL
+        </div>
+        <div class="input-tab" id="tabBtn-playlist" onclick="switchInputTab('playlist')">📋 Playlist</div>
+        <div class="input-tab" id="tabBtn-manual" onclick="switchInputTab('manual')">Paste Transcript</div>
+      </div>
+
+      <!-- ── URL INPUT TAB ── -->
+      <div class="input-panel active" id="tab-url">
+
+        <!-- URL input field with YouTube icon and validation indicator -->
+        <div class="url-input-wrap">
+          <div class="yt-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </div>
+          <input type="text" id="urlInput"
+                 placeholder="https://www.youtube.com/watch?v=..."
+                 oninput="onUrlInput()"
+                 onpaste="setTimeout(onUrlInput, 30)"
+                 autocomplete="off" spellcheck="false" />
+          <div class="url-status" id="urlStatus">—</div>
+        </div>
+        <p class="help-text">Supports youtube.com, youtu.be, and Shorts. Works on lectures from 1 hour to 90+ hours.</p>
+
+        <!-- Video preview card (shown once a valid URL is detected) -->
+        <div class="video-card" id="videoCard">
+          <img class="video-thumb" id="videoThumb" src="" alt="" onerror="this.style.visibility='hidden'" />
+          <div class="video-meta">
+            <div class="video-title" id="videoTitle">—</div>
+            <div class="video-channel" id="videoChannel"></div>
+            <div class="video-id-badge" id="videoIdBadge"></div>
+          </div>
+        </div>
+
+        <!-- Fetch progress loader (shown while fetching transcript) -->
+        <div class="loader-wrap" id="fetchLoader">
+          <div class="spinner"></div>
+          <div class="loader-body">
+            <div class="loader-text" id="fetchLoaderText">Fetching transcript…</div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="fetchProgressBar" style="width:0%"></div>
+            </div>
+            <div class="loader-steps">
+              <div class="loader-step" id="ls1">Connecting to YouTube</div>
+              <div class="loader-step" id="ls2">Locating caption track</div>
+              <div class="loader-step" id="ls3">Downloading &amp; parsing text</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error box (shown if transcript fetch fails) -->
+        <div class="error-box" id="fetchError">
+          <div class="error-title">⚠ Could not fetch transcript</div>
+          <div class="error-msg" id="fetchErrorMsg"></div>
+          <div class="error-hint">→ Fix: Export your browser cookies and set YOUTUBE_COOKIES_FILE in .env.
+            See .env.example for step-by-step instructions. Or switch to "Paste Transcript" to continue now.</div>
+        </div>
+
+        <!-- Transcript preview (shown after successful fetch) -->
+        <div class="transcript-box" id="transcriptPreview">
+          <div class="transcript-header">
+            <span class="transcript-status" id="transcriptStatus">✓ Ready</span>
+            <div class="transcript-chips">
+              <div class="info-chip" id="durationChip" style="display:none"></div>
+              <div class="info-chip" id="chunksChip" style="display:none"></div>
+              <button class="btn btn-ghost btn-sm" onclick="clearTranscript()">Clear</button>
+            </div>
+          </div>
+          <!-- Editable textarea — user can review/edit the transcript before processing -->
+          <textarea id="transcriptTextarea" placeholder="Transcript will appear here…" spellcheck="false"></textarea>
+
+          <!-- Quick download of raw transcript right after fetching -->
+          <div class="inline-downloads" id="transcriptDownloads" style="display:none;">
+            <span class="inline-dl-label">Download transcript:</span>
+            <button class="btn-inline-dl" onclick="downloadCurrentTranscript('txt')">📋 .txt</button>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="btn-row">
+          <button class="btn btn-yt" id="fetchBtn" onclick="fetchTranscript()" disabled>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+            Fetch Transcript
+          </button>
+          <button class="btn btn-primary" id="proceedBtn" onclick="goToNotes()" style="display:none;">
+            Generate Notes →
+          </button>
+        </div>
+      </div><!-- end tab-url -->
+
+      <!-- ── MANUAL PASTE TAB ── -->
+      <div class="input-panel" id="tab-manual">
+        <textarea id="manualTranscript"
+          placeholder="Paste your lecture transcript here…
+
+Tips:
+• YouTube: click ⋮ under the video → 'Show transcript' → select all → copy
+• Any spoken content works — lectures, podcasts, conference talks
+• No length limit — 90+ hour transcripts are fully supported
+• Gemini 2.5 Pro supports ~700,000 words per session
+• Long content is automatically chunked, processed, and merged"></textarea>
+
+        <!-- Capacity bar shows how much of the context window is used -->
+        <div id="capacityBarWrap" style="display:none; margin-top:0.5rem;">
+          <div class="capacity-bar">
+            <div class="capacity-fill" id="capacityFill"></div>
+          </div>
+          <div class="capacity-label" id="capacityLabel"></div>
+        </div>
+        <p class="help-text">Gemini 2.5 Pro supports ~700,000 words. Longer content is auto-chunked and merged.</p>
+
+        <div class="divider">or load a sample</div>
+        <button class="btn btn-ghost" onclick="loadSample()">↓ Load Sleep Science Lecture Sample</button>
+
+        <div class="btn-row" style="margin-top:1.25rem;">
+          <button class="btn btn-primary" onclick="goToNotesManual()">Generate Notes →</button>
+        </div>
+      </div><!-- end tab-manual -->
+
+      <!-- ── PLAYLIST TAB ── -->
+      <div class="input-panel" id="tab-playlist">
+
+        <div class="playlist-intro">
+          <strong>Process an entire course playlist</strong> — LectureAI fetches every
+          video's transcript and generates one unified course notes document.
+          Perfect for full ML/AI courses on YouTube. <strong>No video limit</strong> — full playlists supported.
+        </div>
+
+        <!-- Playlist URL input -->
+        <div class="url-input-wrap" style="margin-bottom:0.75rem;">
+          <div class="yt-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </div>
+          <input type="text" id="playlistUrlInput"
+                 placeholder="https://www.youtube.com/playlist?list=PL..."
+                 autocomplete="off" spellcheck="false" />
+        </div>
+        <p class="help-text">Paste a YouTube playlist URL. Supports full playlists of any size — no video limit!</p>
+
+        <!-- Playlist fetch loader -->
+        <div class="loader-wrap" id="playlistInfoLoader" style="display:none;">
+          <div class="spinner"></div>
+          <div class="loader-body">
+            <div class="loader-text">Fetching playlist info…</div>
+          </div>
+        </div>
+
+        <!-- Error box for playlist -->
+        <div class="error-box" id="playlistError">
+          <div class="error-title">⚠ Playlist error</div>
+          <div class="error-msg" id="playlistErrorMsg"></div>
+        </div>
+
+        <!-- Playlist preview (shown after successful info fetch) -->
+        <div id="playlistPreview" style="display:none; margin-top:1rem;">
+          <div class="playlist-meta" id="playlistMeta"></div>
+
+          <!-- Video list with checkboxes to select/deselect videos -->
+          <div class="playlist-video-list" id="playlistVideoList"></div>
+
+          <div class="playlist-actions">
+            <button class="btn-link" onclick="selectAllVideos(true)">Select all</button>
+            <span style="color:var(--text3)">·</span>
+            <button class="btn-link" onclick="selectAllVideos(false)">Deselect all</button>
+            <span class="playlist-selected-count" id="playlistSelectedCount"></span>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="playlistInfoBtn" onclick="fetchPlaylistInfo()">
+            🔍 Load Playlist
+          </button>
+          <button class="btn btn-primary" id="playlistProcessBtn"
+                  onclick="startPlaylistJob()" style="display:none;">
+            ✦ Generate Course Notes →
+          </button>
+        </div>
+
+        <!-- Playlist options — shown once playlist is loaded -->
+        <div id="playlistOptions" style="display:none; margin-top:1rem;">
+          <div class="playlist-options-box">
+            <div class="playlist-options-title">Note Style for this playlist:</div>
+            <div class="format-row" style="flex-wrap:wrap; gap:0.4rem;">
+              <div class="format-opt selected" data-ptone="comprehensive" onclick="selectPlaylistTone(this)">
+                <span class="opt-name">Comprehensive</span>
+                <span class="opt-desc">Every detail captured</span>
+              </div>
+              <div class="format-opt" data-ptone="notes" onclick="selectPlaylistTone(this)">
+                <span class="opt-name">Structured Notes</span>
+                <span class="opt-desc">Headings + key points</span>
+              </div>
+              <div class="format-opt" data-ptone="bullet" onclick="selectPlaylistTone(this)">
+                <span class="opt-name">Bullet Points</span>
+                <span class="opt-desc">8-15 key takeaways/video</span>
+              </div>
+              <div class="format-opt" data-ptone="concise" onclick="selectPlaylistTone(this)">
+                <span class="opt-name">Concise</span>
+                <span class="opt-desc">3-5 sentence summaries</span>
+              </div>
+            </div>
+            <div class="playlist-options-hint">
+              💡 <strong>Tip:</strong> Use <em>Bullet Points</em> or <em>Concise</em> for large playlists to save API quota.
+              <em>Comprehensive</em> uses ~3× more API calls per video.
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end tab-playlist -->
+
+    </div><!-- end panel-body -->
+  </div><!-- end panel1 -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PANEL 2 — GENERATE NOTES
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="panel" id="panel2">
+    <div class="panel-head">
+      <div class="panel-title"><span class="panel-num">02</span><h2>Generate Study Notes</h2></div>
+      <span class="panel-badge" id="badge2">{{ model }}</span>
+    </div>
+    <div class="panel-body">
+
+      <!-- Note style selector -->
+      <div class="option-group">
+        <div class="option-label">Note style</div>
+        <div class="format-row">
+          <div class="format-opt selected" data-tone="comprehensive" onclick="selectTone(this)">
+            <span class="opt-name">Comprehensive</span>
+            <span class="opt-desc">Everything — miss nothing</span>
+          </div>
+          <div class="format-opt" data-tone="notes" onclick="selectTone(this)">
+            <span class="opt-name">Structured Notes</span>
+            <span class="opt-desc">Headings + key points</span>
+          </div>
+          <div class="format-opt" data-tone="bullet" onclick="selectTone(this)">
+            <span class="opt-name">Bullet Points</span>
+            <span class="opt-desc">Key takeaways list</span>
+          </div>
+          <div class="format-opt" data-tone="detailed" onclick="selectTone(this)">
+            <span class="opt-name">Summary</span>
+            <span class="opt-desc">Dense paragraphs</span>
+          </div>
+          <div class="format-opt" data-tone="concise" onclick="selectTone(this)">
+            <span class="opt-name">Quick Summary</span>
+            <span class="opt-desc">3-5 sentences</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model selector — updates header pill when changed -->
+      <div class="option-group">
+        <div class="option-label">AI Model</div>
+        <div class="format-row">
+          <div class="model-opt" data-model="gemini-2.5-pro" onclick="selectModel(this)">
+            <span class="opt-name">Gemini 2.5 Pro</span>
+            <span class="opt-desc">Best quality · 25 req/day free</span>
+          </div>
+          <div class="model-opt selected" data-model="gemini-2.5-flash" onclick="selectModel(this)">
+            <span class="opt-name">Gemini 2.5 Flash</span>
+            <span class="opt-desc">Fast + great · 250 req/day free</span>
+          </div>
+          <div class="model-opt" data-model="gemini-2.5-flash-lite" onclick="selectModel(this)">
+            <span class="opt-name">2.5 Flash Lite</span>
+            <span class="opt-desc">Fastest Gemini · 1,000/day free</span>
+          </div>
+          <div class="model-opt" data-model="groq-llama-3.3-70b" onclick="selectModel(this)">
+            <span class="opt-name">Llama 3.3 70B</span>
+            <span class="opt-desc">Groq · ~14,400/day free ⭐</span>
+          </div>
+          <div class="model-opt" data-model="groq-llama-3.1-8b" onclick="selectModel(this)">
+            <span class="opt-name">Llama 3.1 8B</span>
+            <span class="opt-desc">Groq · Fastest · Huge free limits</span>
+          </div>
+          <div class="model-opt" data-model="groq-mixtral" onclick="selectModel(this)">
+            <span class="opt-name">Mixtral 8x7B</span>
+            <span class="opt-desc">Groq · Long context · Free</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing estimate — shows expected time based on transcript length -->
+      <div class="processing-estimate" id="procEstimate" style="display:none;"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="notesBtn" onclick="runNotes()">✦ Generate Notes</button>
+        <button class="btn btn-ghost" onclick="goToPanel(1)">← Back</button>
+      </div>
+
+      <!-- Notes generation progress loader -->
+      <div class="loader-wrap" id="notesLoader">
+        <div class="spinner"></div>
+        <div class="loader-body">
+          <div class="loader-text" id="notesLoaderText">Processing…</div>
+          <!-- Progress bar showing chunk completion -->
+          <div class="progress-bar-wrap" style="margin-top:0.5rem;">
+            <div class="progress-bar" id="notesProgressBar" style="width:0%"></div>
+          </div>
+          <div class="progress-label" id="notesProgressLabel"></div>
+          <div class="loader-steps" id="notesSteps" style="margin-top:0.5rem;"></div>
+        </div>
+      </div>
+
+      <!-- Notes result area (hidden until notes are generated) -->
+      <div id="notesResult" style="display:none; margin-top:1.25rem;">
+        <div class="result-meta" id="notesMeta"></div>
+
+        <!-- Rendered Markdown preview -->
+        <div class="output-box markdown-preview" id="notesContent"></div>
+
+        <!-- Stats row -->
+        <div class="stats-row" id="notesStats"></div>
+
+        <!-- Download notes BEFORE moving to article step -->
+        <div class="quick-download-bar">
+          <span class="qdl-label">Download notes now:</span>
+          <button class="btn-qdl" onclick="downloadNotesAs('md')">📝 Markdown</button>
+          <button class="btn-qdl" onclick="downloadNotesAs('docx')">📄 Word</button>
+          <button class="btn-qdl" onclick="downloadNotesAs('pdf')">🖨️ PDF</button>
+          <button class="btn-qdl" onclick="downloadNotesAs('txt')">📋 Text</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-success" onclick="goToPanel(3)">Generate Article →</button>
+          <button class="btn btn-primary" onclick="goToPanel(4)" style="background:var(--accent2,#22c55e);" title="Skip article generation and go straight to export">⬇ Skip to Export</button>
+          <button class="btn btn-ghost" onclick="copyEl('notesContent')">Copy</button>
+          <button class="btn btn-ghost" onclick="runNotes()">Re-generate</button>
+        </div>
+      </div>
+
+    </div><!-- end panel-body -->
+  </div><!-- end panel2 -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PANEL 3 — GENERATE ARTICLE
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="panel" id="panel3">
+    <div class="panel-head">
+      <div class="panel-title"><span class="panel-num">03</span><h2>Generate Article</h2></div>
+      <span class="panel-badge" id="badge3">{{ model }}</span>
+    </div>
+    <div class="panel-body">
+
+      <!-- Article format selector -->
+      <div class="option-group">
+        <div class="option-label">Article format</div>
+        <div class="format-row">
+          <div class="format-opt selected" data-fmt="studynotes" onclick="selectFmt(this)">
+            <span class="opt-name">Study Guide</span>
+            <span class="opt-desc">Full guide + review Q&amp;A</span>
+          </div>
+          <div class="format-opt" data-fmt="html" onclick="selectFmt(this)">
+            <span class="opt-name">HTML Article</span>
+            <span class="opt-desc">Structured article</span>
+          </div>
+          <div class="format-opt" data-fmt="markdown" onclick="selectFmt(this)">
+            <span class="opt-name">Markdown</span>
+            <span class="opt-desc">Notion / Obsidian</span>
+          </div>
+          <div class="format-opt" data-fmt="blog" onclick="selectFmt(this)">
+            <span class="opt-name">Blog Post</span>
+            <span class="opt-desc">Engaging long-form</span>
+          </div>
+          <div class="format-opt" data-fmt="newsletter" onclick="selectFmt(this)">
+            <span class="opt-name">Newsletter</span>
+            <span class="opt-desc">Shareable digest</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="articleBtn" onclick="runArticle()">✦ Generate Article</button>
+        <button class="btn btn-ghost" onclick="goToPanel(2)">← Back</button>
+      </div>
+
+      <!-- Article generation loader -->
+      <div class="loader-wrap" id="artLoader">
+        <div class="spinner"></div>
+        <div class="loader-body">
+          <div class="loader-text" id="artLoaderText">Writing article…</div>
+          <div class="progress-bar-wrap" style="margin-top:0.5rem;">
+            <div class="progress-bar" id="artProgressBar" style="width:30%"></div>
+          </div>
+          <div class="progress-label" id="artProgressLabel">Sending to Gemini…</div>
+        </div>
+      </div>
+
+      <!-- Article result area -->
+      <div id="articleResult" style="display:none; margin-top:1.25rem;">
+        <div class="result-meta" id="articleMeta"></div>
+
+        <!-- Preview / Source tabs -->
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('preview')">Preview</div>
+          <div class="tab" onclick="switchTab('source')">Source</div>
+        </div>
+        <div id="tabPreview" class="article-preview"></div>
+        <pre id="tabSource" class="output-box code" style="display:none;"></pre>
+
+        <!-- Download article immediately after generation -->
+        <div class="quick-download-bar">
+          <span class="qdl-label">Download article now:</span>
+          <button class="btn-qdl" onclick="downloadArticleAs('html')">🌐 HTML</button>
+          <button class="btn-qdl" onclick="downloadArticleAs('md')">📝 Markdown</button>
+          <button class="btn-qdl" onclick="downloadArticleAs('docx')">📄 Word</button>
+          <button class="btn-qdl" onclick="downloadArticleAs('pdf')">🖨️ PDF</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-success" onclick="goToPanel(4)">Export All →</button>
+          <button class="btn btn-ghost" onclick="copyArticleSource()">Copy Source</button>
+          <button class="btn btn-ghost" onclick="runArticle()">Re-generate</button>
+        </div>
+      </div>
+
+    </div><!-- end panel-body -->
+  </div><!-- end panel3 -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PANEL 4 — EXPORT ALL FORMATS
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="panel" id="panel4">
+    <div class="panel-head">
+      <div class="panel-title"><span class="panel-num">04</span><h2>Export Everything</h2></div>
+      <span class="panel-badge">Done</span>
+    </div>
+    <div class="panel-body">
+
+      <p class="body-text" style="margin-bottom:1.5rem;">
+        All your content is ready. Download in any format.
+      </p>
+
+      <div class="btn-row" style="margin-bottom:1.5rem;">
+        <button class="btn btn-ghost" id="backToArticleBtn" onclick="goToPanel(3)">← Back to Article</button>
+        <button class="btn btn-ghost" onclick="goToPanel(2)">← Back to Notes</button>
+      </div>
+
+      <!-- Notes export section -->
+      <div class="export-section">
+        <div class="export-section-label">Study Notes</div>
+        <div class="export-grid">
+          <button class="export-btn" onclick="downloadNotesAs('md')">
+            <span class="export-icon">📝</span>
+            <span class="export-label">Markdown</span>
+            <span class="export-desc">Notion / Obsidian</span>
+          </button>
+          <button class="export-btn" onclick="downloadNotesAs('docx')">
+            <span class="export-icon">📄</span>
+            <span class="export-label">Word (.docx)</span>
+            <span class="export-desc">Microsoft Word</span>
+          </button>
+          <button class="export-btn" onclick="downloadNotesAs('pdf')">
+            <span class="export-icon">🖨️</span>
+            <span class="export-label">PDF</span>
+            <span class="export-desc">Print / share</span>
+          </button>
+          <button class="export-btn" onclick="downloadNotesAs('txt')">
+            <span class="export-icon">📋</span>
+            <span class="export-label">Plain Text</span>
+            <span class="export-desc">Any text editor</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Article export section -->
+      <div class="export-section" style="margin-top:1.5rem;">
+        <div class="export-section-label">Article <span style="font-size:0.65rem; color:var(--text3); font-weight:400;">(optional — generate in Step 3)</span></div>
+        <div id="noArticleHint" style="display:none; font-family:'DM Mono',monospace; font-size:0.63rem; color:var(--text3); margin-bottom:0.75rem; padding:0.5rem 0.75rem; border:1px dashed var(--border); border-radius:var(--radius);">
+          No article yet. <button onclick="goToPanel(3)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;">Go to Step 3 to generate one</button>, or download your notes above — article is optional.
+        </div>
+        <div class="export-grid">
+          <button class="export-btn" onclick="downloadArticleAs('html')">
+            <span class="export-icon">🌐</span>
+            <span class="export-label">HTML File</span>
+            <span class="export-desc">Open in browser</span>
+          </button>
+          <button class="export-btn" onclick="downloadArticleAs('md')">
+            <span class="export-icon">📝</span>
+            <span class="export-label">Markdown</span>
+            <span class="export-desc">Notion / Obsidian</span>
+          </button>
+          <button class="export-btn" onclick="downloadArticleAs('docx')">
+            <span class="export-icon">📄</span>
+            <span class="export-label">Word (.docx)</span>
+            <span class="export-desc">Microsoft Word</span>
+          </button>
+          <button class="export-btn" onclick="downloadArticleAs('pdf')">
+            <span class="export-icon">🖨️</span>
+            <span class="export-label">PDF</span>
+            <span class="export-desc">Print / share</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Raw transcript export — hidden when processing a playlist (no raw transcript) -->
+      <div class="export-section" id="transcriptExportSection" style="margin-top:1.5rem;">
+        <div class="export-section-label">Raw Transcript</div>
+        <div class="export-grid">
+          <button class="export-btn" onclick="downloadCurrentTranscript('txt')">
+            <span class="export-icon">📋</span>
+            <span class="export-label">Transcript .txt</span>
+            <span class="export-desc">Full original text</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Coverage audit and reset -->
+      <div class="divider" style="margin-top:2rem;">verify completeness</div>
+      <p class="help-text" style="margin-bottom:1rem;">
+        Let Gemini audit your notes against the transcript — it will list exactly
+        what's covered, what's thin, and what's missing.
+      </p>
+      <button class="btn btn-ghost" onclick="goToPanel(5)">🔍 Run Coverage Audit →</button>
+
+      <div class="divider" style="margin-top:1.5rem;">start over</div>
+      <button class="btn btn-ghost" onclick="startOver()">↺ Process Another Lecture</button>
+
+    </div>
+  </div><!-- end panel4 -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PANEL 5 — COVERAGE AUDIT
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="panel" id="panel5">
+    <div class="panel-head">
+      <div class="panel-title"><span class="panel-num">05</span><h2>Coverage Audit</h2></div>
+      <span class="panel-badge">Verification</span>
+    </div>
+    <div class="panel-body">
+
+      <p class="body-text" style="margin-bottom:1.25rem;">
+        Gemini will independently extract 25 specific facts from your transcript,
+        check each one against your notes, calculate a coverage percentage,
+        and give a final verdict with a list of exactly what's missing.
+      </p>
+
+      <!-- Audit context stats -->
+      <div class="audit-info">
+        <div class="audit-stat" id="auditTranscriptWords">Transcript: — words</div>
+        <div class="audit-stat" id="auditNotesWords">Notes: — words</div>
+      </div>
+
+      <!-- Model selector for audit -->
+      <div class="option-group">
+        <div class="option-label">Audit model</div>
+        <div class="format-row">
+          <div class="model-opt selected" data-amodel="gemini-2.5-flash" onclick="selectAuditModel(this)">
+            <span class="opt-name">Gemini 2.5 Flash</span>
+            <span class="opt-desc">Fast + accurate</span>
+          </div>
+          <div class="model-opt" data-amodel="gemini-2.5-pro" onclick="selectAuditModel(this)">
+            <span class="opt-name">Gemini 2.5 Pro</span>
+            <span class="opt-desc">Most thorough audit</span>
+          </div>
+          <div class="model-opt" data-amodel="gemini-2.5-flash-lite" onclick="selectAuditModel(this)">
+            <span class="opt-name">2.5 Flash Lite</span>
+            <span class="opt-desc">Fast · 1,000/day free</span>
+          </div>
+          <div class="model-opt" data-amodel="groq-llama-3.3-70b" onclick="selectAuditModel(this)">
+            <span class="opt-name">Llama 3.3 70B</span>
+            <span class="opt-desc">Groq · ~14,400/day free ⭐</span>
+          </div>
+          <div class="model-opt" data-amodel="groq-llama-3.1-8b" onclick="selectAuditModel(this)">
+            <span class="opt-name">Llama 3.1 8B</span>
+            <span class="opt-desc">Groq · Fastest · Huge free limits</span>
+          </div>
+          <div class="model-opt" data-amodel="groq-mixtral" onclick="selectAuditModel(this)">
+            <span class="opt-name">Mixtral 8x7B</span>
+            <span class="opt-desc">Groq · Long context · Free</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="auditBtn" onclick="runAudit()">🔍 Run Audit</button>
+        <button class="btn btn-ghost" onclick="goToPanel(4)">← Back</button>
+      </div>
+
+      <!-- Audit loader -->
+      <div class="loader-wrap" id="auditLoader">
+        <div class="spinner"></div>
+        <div class="loader-body">
+          <div class="loader-text">Gemini is auditing your notes against the transcript…</div>
+          <div class="progress-bar-wrap" style="margin-top:0.5rem;">
+            <div class="progress-bar indeterminate" id="auditProgressBar"></div>
+          </div>
+          <div class="progress-label">This takes 30-90 seconds. Checking 25 specific facts…</div>
+        </div>
+      </div>
+
+      <!-- Audit result -->
+      <div id="auditResult" style="display:none; margin-top:1.25rem;">
+        <!-- Verdict badge with color coding -->
+        <div class="coverage-score" id="coverageScore"></div>
+        <!-- Full audit report in Markdown -->
+        <div class="output-box markdown-preview" id="auditContent" style="max-height:600px;"></div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="downloadAudit()">↓ Download Report</button>
+          <button class="btn btn-ghost" onclick="copyEl('auditContent')">Copy Report</button>
+          <button class="btn btn-ghost" onclick="runNotes()">Re-generate Notes</button>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- end panel5 -->
+
+</main><!-- end main -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     ASYNC JOB PROGRESS MODAL
+     Shown for long lectures (> 25k words) processed in background.
+     Polls /api/job/<id> every 3 seconds and shows live log.
+══════════════════════════════════════════════════════════════ -->
+<div class="job-modal" id="jobModal" style="display:none;">
+  <div class="job-modal-inner">
+    <div class="job-modal-title">
+      <div class="spinner" style="width:18px;height:18px;border-width:2px;"></div>
+      Processing Your Lecture
+    </div>
+    <div class="job-chunks" id="jobChunks">Preparing…</div>
+
+    <!-- Overall progress bar -->
+    <div class="job-bar-wrap">
+      <div class="job-bar" id="jobBar" style="width:2%"></div>
+    </div>
+    <div class="job-eta" id="jobEta"></div>
+
+    <!-- Live terminal-style progress log -->
+    <div class="job-progress-log" id="jobLog">Initializing…</div>
+
+    <p style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--text3);margin-top:0.75rem;">
+      You can close this — processing continues in the background.
+    </p>
+    <button class="btn btn-ghost btn-sm" onclick="cancelJobPoll()" style="margin-top:0.5rem;">
+      Close Modal
+    </button>
+  </div>
+</div>
+
+<!-- Toast notification (bottom-right feedback messages) -->
+<div class="toast" id="toast"></div>
+
+<!-- Load main JavaScript -->
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+</body>
+</html>

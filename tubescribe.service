@@ -1,0 +1,30 @@
+# /etc/systemd/system/tubescribe.service
+# Runs TubeScribe as a background service that auto-starts on boot.
+#
+# Install:
+#   sudo cp tubescribe.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable tubescribe
+#   sudo systemctl start tubescribe
+
+[Unit]
+Description=TubeScribe Flask App (Gunicorn)
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/tubescribe
+EnvironmentFile=/home/ubuntu/tubescribe/.env
+ExecStart=/home/ubuntu/tubescribe/venv/bin/gunicorn \
+    --config gunicorn.conf.py \
+    app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tubescribe
+
+[Install]
+WantedBy=multi-user.target

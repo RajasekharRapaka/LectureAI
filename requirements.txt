@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────
+# LectureAI — Python dependencies
+# Install: pip install -r requirements.txt
+#
+# Free tier Gemini limits (as of 2025):
+#   gemini-2.5-pro:   5 RPM, 25 RPD  — best quality
+#   gemini-2.5-flash: 10 RPM, 250 RPD — faster, great quality (recommended)
+# ─────────────────────────────────────────────────────────────────
+
+# Web framework
+flask==3.1.0
+
+# HTTP client — YouTube scraping + Gemini API calls
+requests==2.32.3
+
+# Loads .env file into environment
+python-dotenv==1.0.1
+
+# Production WSGI server (for EC2 deployment)
+gunicorn==23.0.0
+
+# YouTube transcript fetching with cookie support
+youtube-transcript-api==1.0.3
+
+# Best YouTube downloader — most reliable transcript fetching
+yt-dlp>=2025.1.1
+
+# PDF export — pure Python, NO system dependencies (no cairo, no pango)
+# Works on Mac/Windows/Linux with just: pip install reportlab
+reportlab>=4.0.4
+
+# Word document export
+python-docx>=1.1.0
