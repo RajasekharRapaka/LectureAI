@@ -1,5 +1,8 @@
 # LectureAI
 
+<img width="1366" height="645" alt="Screenshot 2026-04-11 at 12 34 34 AM" src="https://github.com/user-attachments/assets/dbd41f9b-8c42-443e-b6f4-389fb0fdd6c4" />
+
+
 YouTube Lecture → Comprehensive Study Notes, Articles & PDF
 Powered by **Google Gemini** and **Groq** (free-tier multi-model support)
 
